@@ -23,6 +23,7 @@ const (
 	EV_ABS = 0x03
 
 	ABS_X  = 0x00
+	ABS_RX = 0x03
 	ABS_HX = 0x10
 
 	BUS_USB = 0x03
@@ -36,6 +37,7 @@ type userInput struct {
 	file         *os.File
 	lastValue    int
 	lastRelValue int
+	lastComValue int
 }
 
 type uiId struct {
@@ -97,6 +99,8 @@ func CreateUserInput(name string, path string) (*userInput, error) {
 	}
 	uidev.absMax[ABS_X] = 32767
 	uidev.absMin[ABS_X] = -32767
+	uidev.absMax[ABS_RX] = 32767
+	uidev.absMin[ABS_RX] = -32767
 	uidev.absMax[ABS_HX] = 1
 	uidev.absMin[ABS_HX] = -1
 
@@ -110,6 +114,12 @@ func CreateUserInput(name string, path string) (*userInput, error) {
 	errno = ioctl(file, UI_SET_ABSBIT, uintptr(ABS_X))
 	if errno != 0 {
 		return nil, errors.New("failed to reate ABS_X: " + fmt.Sprint(errno))
+	}
+
+	// enable abs rx
+	errno = ioctl(file, UI_SET_ABSBIT, uintptr(ABS_RX))
+	if errno != 0 {
+		return nil, errors.New("failed to reate ABS_RX: " + fmt.Sprint(errno))
 	}
 
 	// enable abs hat x
@@ -189,6 +199,13 @@ func (u *userInput) WriteReader(r *deviceReader) error {
 		}
 		u.lastRelValue = r.relVal
 	}
+	if u.lastComValue != r.comVal {
+		err := u.WriteComputed(r.comVal)
+		if err != nil {
+			return err
+		}
+		u.lastComValue = r.comVal
+	}
 
 	return nil
 }
@@ -210,6 +227,18 @@ func (u *userInput) WriteRel(value int) error {
 	err := u.writeEvent(uiEvent{
 		Type:  EV_ABS,
 		Code:  ABS_HX,
+		Value: int32(value),
+	})
+	if err != nil {
+		return err
+	}
+	return u.syncEvents()
+}
+
+func (u *userInput) WriteComputed(value int) error {
+	err := u.writeEvent(uiEvent{
+		Type:  EV_ABS,
+		Code:  ABS_RX,
 		Value: int32(value),
 	})
 	if err != nil {

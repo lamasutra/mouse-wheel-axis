@@ -14,6 +14,7 @@ type deviceReader struct {
 	maxVal      int
 	value       int
 	relVal      int
+	comVal      int
 	lastRelTime int64
 }
 
@@ -51,24 +52,38 @@ func (r *deviceReader) Read() {
 
 	// Relative motion events
 	if event.Type == evdev.EV_REL {
+		var step int
 		// scroll
 		if event.Code == evdev.REL_HWHEEL {
 			r.lastRelTime = now
-			r.relVal = int(event.Value)
-			if event.Value == 1 {
-				r.value += 2048
+			if event.Value > 0 {
+				r.relVal = 1
+			} else {
+				r.relVal = -1
+			}
+
+			step = int(event.Value * 1024)
+			r.value += step
+			r.comVal += step
+			if event.Value > 0 {
+				if r.comVal > 0 {
+					r.comVal = 0
+				}
 				if r.value > r.maxVal {
 					r.value = r.maxVal
 				}
-				// fmt.Printf("Scroll down")
 			} else {
-				r.value -= 2048
+				if r.comVal < r.minVal {
+					r.comVal = r.minVal
+				}
 				if r.value < r.minVal {
 					r.value = r.minVal
 				}
-				// fmt.Printf("Scroll up")
 			}
-			// fmt.Println("rel", r.relVal)
+			if r.comVal > 0 {
+				r.comVal = 0
+			}
+			fmt.Println("step:", step, "value:", event.Value, "x:", r.value, "rx:", r.comVal, "xh", r.relVal)
 		}
 	}
 }
